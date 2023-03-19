@@ -24,9 +24,10 @@ pip install -r requirements-dev.txt
 
 # TODO:
 
-* 
-* Deploy the bot to Railway
-* Make the bot have a green dot if it's online or a grey dot if not
-* Make the bot respond with markdown
-* Use Redis for permanent memory
-* 
+[ ] Deploy the bot to Railway
+[ ] Make the bot have a green dot if it's online or a grey dot if not
+[ ] Make the bot respond with markdown
+[ ] Use Redis for permanent memory
+[ ] Use OpenAI streaming to generate text
+[ ] Have a "Bot is typing..." message or some other indicator...
+[ ] Create a dev and staging bot that runs the bot with a different name in Slack
