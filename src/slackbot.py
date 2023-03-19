@@ -58,9 +58,6 @@ class SlackBot:
         self.bot_user_id = response["user_id"]
         print("Bot user id: ", self.bot_user_id)
 
-        # Notify Slack that the bot is present so that the green dot shows up:
-        await self.app.client.users_setPresence(presence="active")
-
         self.bot_user_name = await self.get_mention_username(self.bot_user_id)
 
         await AsyncSocketModeHandler(app, SLACK_APP_TOKEN).start_async()
