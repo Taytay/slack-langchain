@@ -1,0 +1,1 @@
+modal run ./src/slackbot.py

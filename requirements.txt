@@ -1,0 +1,6 @@
+langchain==0.0.116
+modal_client==0.48.1638
+openai==0.27.2
+python-dotenv==1.0.0
+slack_bolt==1.16.4
+slack_sdk==3.20.2
