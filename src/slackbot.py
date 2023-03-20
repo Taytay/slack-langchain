@@ -4,6 +4,7 @@
 import logging
 import os
 import asyncio
+import threading
 from slack_sdk.errors import SlackApiError
 from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
@@ -191,11 +192,6 @@ app = AsyncApp(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
 client = app.client
 slack_bot = SlackBot(app)
 
-from slack_sdk.rtm_v2 import RTMClient
-rtm_client = RTMClient(token=SLACK_BOT_TOKEN, auto_reconnect=False, run_async=True)
-def on_connected(connection):
-    print("Bot connected to Slack via rtm (so that the dot turns green)")
-
 @app.event('app_mention')
 async def on_app_mention(payload, say):
     print("Processing app_mention...")
@@ -207,10 +203,7 @@ async def on_message(payload, say):
     await slack_bot.on_message(payload, say)
 
 async def start():
-    rtm_client.on_open_listeners.append(on_connected)
-    # gather multiple tasks:
-    await asyncio.gather(rtm_client.start(),
-     slack_bot.start())
+    await slack_bot.start()
 
 if __name__ == "__main__":
     asyncio.run(start())
