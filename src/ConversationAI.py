@@ -14,7 +14,7 @@ class ConversationAI:
     def __init__(self, bot_name, existing_thread_history=None):
 
         prompt = ChatPromptTemplate.from_messages([
-            SystemMessagePromptTemplate.from_template(f"The following is a friendly Slack chat thread between a human and an AI named {bot_name}. The AI provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know."),
+            SystemMessagePromptTemplate.from_template(f"The following is a Slack chat thread between a human and an AI named {bot_name}. The AI is helpful and business-like, and avoids sounding overly emotive. It provides specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know."),
             MessagesPlaceholder(variable_name="history"),
             HumanMessagePromptTemplate.from_template("{input}")
         ])

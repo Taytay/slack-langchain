@@ -168,8 +168,10 @@ class SlackBot:
 
     async def on_message(self, event, say):
         message_ts = event['ts']
-        thread_ts = event.get('thread_ts', message_ts) 
+        thread_ts = event.get('thread_ts', message_ts)
         try:
+            # {'client_msg_id': '7e605650-8b39-4f61-99c5-795a1168fb7c', 'type': 'message', 'text': 'Hi there Chatterbot', 'user': 'U024LBTMX', 'ts': '1679289332.087509', 'blocks': [{'type': 'rich_text', 'block_id': 'ins/', 'elements': [{'type': 'rich_text_section', 'elements': [{'type': 'text', 'text': 'Hi there Chatterbot'}]}]}], 'team': 'T024LBTMV', 'channel': 'D04V265MYEM', 'event_ts': '1679289332.087509', 'channel_type': 'im'}
+
             print(f"Received message event: {event}")
             # At first I thought we weren't told about our own messages, but I don't think that's true. Let's make sure we aren't hearing about our own:
             if event['user'] == self.bot_user_id:
@@ -177,8 +179,16 @@ class SlackBot:
                 return
             #if 'thread_ts' in event and 'subtype' not in event:
 
+            channel_id = event['channel']
+            # Is this message part of an im?
+            channel_type = event.get('channel_type', None)
+            if channel_type and channel_type == "im":
+                # This is a direct message. So of course we should be participating if we are not
+                if not self.is_ai_participating_in_thread(thread_ts, message_ts):
+                    await self.add_ai_to_thread(channel_id, thread_ts, message_ts)
+
             # And are we participating in it?
-            if thread_ts in self.threads_bot_is_participating_in:
+            if self.is_ai_participating_in_thread(thread_ts, message_ts):
                 channel_id = event['channel']
                 user_id = event['user']
                 text = event['text']
