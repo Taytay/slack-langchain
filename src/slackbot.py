@@ -56,9 +56,9 @@ class SlackBot:
         print("Looking up bot user_id. (If this fails, something is wrong with the auth)")
         response = await self.app.client.auth_test()
         self.bot_user_id = response["user_id"]
-        print("Bot user id: ", self.bot_user_id)
-
         self.bot_user_name = await self.get_mention_username(self.bot_user_id)
+        print("Bot user id: ", self.bot_user_id)
+        print("Bot user name: ", self.bot_user_name)
 
         await AsyncSocketModeHandler(app, SLACK_APP_TOKEN).start_async()
 
@@ -91,7 +91,7 @@ class SlackBot:
             conversation_ai = self.threads_bot_is_participating_in.get(thread_ts, None)
             if conversation_ai is None:
                 raise Exception("No AI found for thread_ts")
-            text = await self.clean_up_message(text)
+            text = await self.clean_mentions(text)
             sender_username = await self.get_mention_username(user_id)
             response = conversation_ai.respond(sender_username, text)
             await self.reply_to_slack(channel_id, thread_ts, response)
@@ -103,7 +103,7 @@ class SlackBot:
     def is_parent_thread_message(message_ts, thread_ts):
         return message_ts == thread_ts
 
-    async def clean_up_message(self, text):
+    async def clean_mentions(self, text):
         # Replace every @mention of a user id with their actual name:
         # First, use a regex to find @mentions that look like <@U123456789>:
         matches = re.findall(r"<@(U[A-Z0-9]+)>", text)
@@ -119,7 +119,6 @@ class SlackBot:
         if thread_ts in self.threads_bot_is_participating_in:
             return
 
-
         processed_history = None
         # Is this thread_ts the very first message in the thread? If so, we need to create a new AI for it.
         if not self.is_parent_thread_message(message_ts, thread_ts):
@@ -132,7 +131,7 @@ class SlackBot:
             processed_history = []
             for message in thread_history.data['messages']:
                 text = message['text']
-                text = await self.clean_up_message(text)
+                text = await self.clean_mentions(text)
                 user_id = message['user']
                 #user_name = await self.get_mention_username(user_id)
                 #print(f"Adding message: '{user_name}: {text}")
@@ -192,21 +191,31 @@ app = AsyncApp(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
 client = app.client
 slack_bot = SlackBot(app)
 
+from slack_sdk.rtm_v2 import RTMClient
+rtm_client = RTMClient(token=SLACK_BOT_TOKEN, auto_reconnect=False, run_async=True)
+def on_connected(connection):
+    print("Bot connected to Slack via rtm (so that the dot turns green)")
+
 @app.event('app_mention')
 async def on_app_mention(payload, say):
+    print("Processing app_mention...")
     await slack_bot.on_app_mention(payload, say)
 
 @app.event("message")
 async def on_message(payload, say):
+    print("Processing message...")
     await slack_bot.on_message(payload, say)
 
 async def start():
-    await slack_bot.start()
+    rtm_client.on_open_listeners.append(on_connected)
+    # gather multiple tasks:
+    await asyncio.gather(rtm_client.start(),
+     slack_bot.start())
 
 if __name__ == "__main__":
     asyncio.run(start())
 
-
+# The following is for modal.com:
 @stub.webhook(
     method="GET"
 )

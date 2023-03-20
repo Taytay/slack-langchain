@@ -1,17 +1,17 @@
 {
     "display_information": {
-        "name": "chatterbot",
+        "name": "Chatterbot",
         "description": "AI bot that uses GPT to be helpful",
         "background_color": "#365dd1"
     },
     "features": {
         "app_home": {
-            "home_tab_enabled": true,
+            "home_tab_enabled": false,
             "messages_tab_enabled": true,
             "messages_tab_read_only_enabled": false
         },
         "bot_user": {
-            "display_name": "chatterbot",
+            "display_name": "Chatterbot",
             "always_online": false
         }
     },
