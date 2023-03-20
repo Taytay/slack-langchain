@@ -24,11 +24,12 @@ pip install -r requirements-dev.txt
 
 # TODO:
 
-[x] Deploy the bot to Railway
-[ ] Make the bot have a green dot if it's online or a grey dot if not
-[ ] Make the bot respond with markdown
-[ ] Use Redis for permanent memory
-[ ] Use OpenAI streaming to generate text
-[ ] Have a "Bot is typing..." message or some other indicator...
-[ ] Create a dev and staging bot that runs the bot with a different name in Slack
-[ ] Switch to use a different type of memory, like token buffer: https://langchain.readthedocs.io/en/latest/modules/memory/types/token_buffer.html
+
+- [x] Deploy the bot to Railway
+- [ ] Make the bot have a green dot if it's online or a grey dot if not
+- [ ] Make the bot respond with markdown
+- [ ] Use Redis for permanent memory
+- [ ] Use OpenAI streaming to generate text
+- [ ] Have a "Bot is typing..." message or some other indicator...
+- [ ] Create a dev and staging bot that runs the bot with a different name in Slack
+- [ ] Switch to use a different type of memory, like token buffer: https://langchain.readthedocs.io/en/latest/modules/memory/types/token_buffer.html
