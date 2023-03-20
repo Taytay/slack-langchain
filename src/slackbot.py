@@ -4,12 +4,10 @@
 import logging
 import os
 import asyncio
-import threading
 from slack_sdk.errors import SlackApiError
 from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from dotenv import load_dotenv
-from pprint import pprint
 import re
 from pathlib import Path
 
@@ -79,7 +77,47 @@ class SlackBot:
         self.id_to_name_cache[user_id] = ret_val
         return ret_val
 
+    async def upload_snippets(self, channel_id, thread_ts, response):
+        # Unused at the moment
+        # Find all triple-backtick code blocks in the markdown formatted response:
+        matches = re.findall(r"```(.*?)```", response, re.DOTALL)
+        counter = 1
+        for match in matches:
+            # Upload the code block as a file:
+            # Find out what kind of code block it is:
+            # It will be specified as the first word following the backticks:
+            match = match.strip()
+            first_line = match.splitlines()[0]
+            first_word = first_line.split()[0]
+            extension = "txt"
+            if first_word == "python":
+                extension = "py"
+            elif first_word == "javascript":
+                extension = "js"
+            elif first_word == "typescript":
+                extension = "js"
+            elif first_word == "bash":
+                extension = "sh"
+            
+            if extension is None:
+                # If we have a first word, we can assume the extension is that first word:
+                if first_word is not None:
+                    extension = first_word
+                else:
+                    extension = "txt"
+
+            file_response = await self.client.files_upload(channels=channel_id, content=match, filename=f"snippet_{counter}.{extension}", thread_ts=thread_ts)
+            file_id = file_response["file"]["id"]
+            # Replace the code block with a link to the file:
+            # response = response.replace(f"```{match}```", f"<https://slack.com/files/{self.bot_user_id}/{file_id}|code.py>")
+            response += "\n"+f"<https://slack.com/files/{self.bot_user_id}/{file_id}|code.{extension}>"
+
     async def reply_to_slack(self, channel_id, thread_ts, response):
+        # In the future, we could take out any triple backticks code like:
+        # ```python
+        # print("Hello world!")
+        # ```
+        # And we could upload it to Slack as a file and then link to it in the response.
         await self.client.chat_postMessage(channel=channel_id, text=response, thread_ts=thread_ts)
 
     async def confirm_message_received(self, channel, thread_ts, user_id_of_sender):
@@ -94,10 +132,12 @@ class SlackBot:
                 raise Exception("No AI found for thread_ts")
             text = await self.clean_mentions(text)
             sender_username = await self.get_mention_username(user_id)
-            response = conversation_ai.respond(sender_username, text)
+            response = await conversation_ai.respond(sender_username, text)
             await self.reply_to_slack(channel_id, thread_ts, response)
         except Exception as e:
             response = f":exclamation::exclamation::exclamation: Error: {e}"
+            # Print a red error to the console:
+            logger.exception(response)
             await self.reply_to_slack(channel_id, thread_ts, response)
 
     @staticmethod
@@ -142,8 +182,9 @@ class SlackBot:
                     processed_history.append({"human":text})
 
         ai = ConversationAI(self.bot_user_name, processed_history)
-        self.threads_bot_is_participating_in[thread_ts] = ai
+        #ai = ConversationAgentAI(self.bot_user_name, processed_history)
 
+        self.threads_bot_is_participating_in[thread_ts] = ai
 
     def is_ai_participating_in_thread(self, thread_ts, message_ts):
         if thread_ts in self.threads_bot_is_participating_in:
@@ -196,6 +237,7 @@ class SlackBot:
                 await self.respond_to_message(channel_id, thread_ts, user_id, text)
         except Exception as e:
             response = f":exclamation::exclamation::exclamation: Error: {e}"
+            logger.exception(response)
             await say(text=response, thread_ts=thread_ts)
 
 app = AsyncApp(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
