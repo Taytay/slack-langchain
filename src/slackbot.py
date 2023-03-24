@@ -12,7 +12,8 @@ import re
 from pathlib import Path
 
 from ConversationAI import ConversationAI
-
+from llm_wrappers import get_simple_response
+from langchain import OpenAI
 import modal
 
 # Get the folder this file is in:
@@ -269,12 +270,40 @@ class SlackBot:
                 channel_id = event['channel']
                 user_id = event['user']
                 text = event['text']
+
+                await self.on_member_joined_channel(event)
                 await self.confirm_message_received(channel_id, thread_ts, message_ts, user_id)
                 await self.respond_to_message(channel_id, thread_ts, message_ts, user_id, text)
         except Exception as e:
             response = f":exclamation::exclamation::exclamation: Error: {e}"
             logger.exception(response)
             await say(text=response, thread_ts=thread_ts)
+
+    async def on_member_joined_channel(self, event_data):
+        # Get user ID and channel ID from event data
+        user_id = event_data["user"]
+        channel_id = event_data["channel"]
+
+        user_info = await self.get_user_info_for_user_id(user_id)
+        username = await self.get_username_for_user_id(user_id)
+        profile = user_info.get("profile", {})
+        llm_gpt3_turbo = OpenAI(temperature=1, model_name="gpt-3.5-turbo", request_timeout=30, max_retries=5, verbose=True)
+
+        welcome_message = (await llm_gpt3_turbo.agenerate([f"""
+You are a funny and creative slackbot {self.bot_user_name}
+Someone just joined a Slack channel you are a member of, and you want to welcome them creatively and in a way that will make them feel special.
+You are VERY EXCITED about someone joining the channel, and you want to convey that!
+Their username is {username}, but when you mention their username, you should say "<@{user_id}>" instead.
+Their title is: {profile.get("title")}
+Their current status: "{profile.get("status_emoji")} {profile.get("status_text")}"
+Write a slack message, formatted in Slack markdown, that encourages everyone to welcome them to the channel excitedly.
+Use emojis. Maybe write a song. Maybe a poem.
+
+Afterwards, tell the user that you look forward to "chatting" with them, and tell them that they can just mention <@{self.bot_user_id}> whenever they want to talk.
+"""])).generations[0][0].text
+        # Send a welcome message to the user
+        await self.client.chat_postMessage(channel=channel_id, text=welcome_message)
+
 
 app = AsyncApp(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
 client = app.client
@@ -289,6 +318,12 @@ async def on_app_mention(payload, say):
 async def on_message(payload, say):
     logger.debug("Processing message...")
     await slack_bot.on_message(payload, say)
+
+# Define event handler for user joining a channel
+@app.event("member_joined_channel")
+async def handle_member_joined_channel(event_data):
+    logger.debug("Processing member_joined_channel event", event_data)
+    await slack_bot.on_member_joined_channel(event_data)
 
 async def start():
     await slack_bot.start()
