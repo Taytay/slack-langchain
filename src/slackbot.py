@@ -112,30 +112,40 @@ class SlackBot:
             # response = response.replace(f"```{match}```", f"<https://slack.com/files/{self.bot_user_id}/{file_id}|code.py>")
             response += "\n"+f"<https://slack.com/files/{self.bot_user_id}/{file_id}|code.{extension}>"
 
-    async def reply_to_slack(self, channel_id, thread_ts, response):
+    async def reply_to_slack(self, channel_id, thread_ts, message_ts, response):
         # In the future, we could take out any triple backticks code like:
         # ```python
         # print("Hello world!")
         # ```
         # And we could upload it to Slack as a file and then link to it in the response.
-        await self.client.chat_postMessage(channel=channel_id, text=response, thread_ts=thread_ts)
+        # Let's try something - if they have an emoji, and only an emoji, in the response, let's react to the message with that emoji:
+        # regex for slack emoji:
+        slack_emoji_regex = r":[a-z0-9_+-]+:"
+        if re.match(slack_emoji_regex, response.strip()):
+            try:
+                await self.client.reactions_add(channel=channel_id, name=response.strip().replace(":", ""), timestamp=message_ts)
+            except Exception as e:
+                logger.exception(e)
+            return
+        else:
+            await self.client.chat_postMessage(channel=channel_id, text=response, thread_ts=thread_ts)
 
-    async def confirm_message_received(self, channel, thread_ts, user_id_of_sender):
+    async def confirm_message_received(self, channel, thread_ts, message_ts, user_id_of_sender):
         # React to the message with a thinking face emoji:
         try:
-            await self.client.reactions_add(channel=channel, name="thinking_face", timestamp=thread_ts)
+            await self.client.reactions_add(channel=channel, name="thinking_face", timestamp=message_ts)
         except Exception as e:
             logger.exception(e)
 
-    async def confirm_wont_respond_to_message(self, channel, thread_ts, user_id_of_sender):
-        # React to the message with a see_no_evil emoji:
+    async def confirm_wont_respond_to_message(self, channel, thread_ts, message_ts, user_id_of_sender):
+        # React to the message with a speak_no_evil emoji:
         try:
-            await self.client.reactions_add(channel=channel, name="see_no_evil", timestamp=thread_ts)
+            await self.client.reactions_add(channel=channel, name="speak_no_evil", timestamp=message_ts)
         except Exception as e:
             logger.exception(e)
 
 
-    async def respond_to_message(self, channel_id, thread_ts, user_id, text):
+    async def respond_to_message(self, channel_id, thread_ts, message_ts, user_id, text):
         try:
             conversation_ai = self.threads_bot_is_participating_in.get(thread_ts, None)
             if conversation_ai is None:
@@ -145,9 +155,9 @@ class SlackBot:
             response = await conversation_ai.respond(sender_username, text)
             if (response is None):
                 # Let's just put an emoji on the message to say we aren't responding
-                await self.confirm_wont_respond_to_message(channel_id, thread_ts, user_id)
+                await self.confirm_wont_respond_to_message(channel_id, thread_ts, message_ts, user_id)
             else:
-                await self.reply_to_slack(channel_id, thread_ts, response)
+                await self.reply_to_slack(channel_id, thread_ts, message_ts, response)
         except Exception as e:
             response = f":exclamation::exclamation::exclamation: Error: {e}"
             # Print a red error to the console:
@@ -232,7 +242,6 @@ class SlackBot:
             # We might be able to use the client_msg_id to make sure we don't process the same message twice.
 
 
-
             print(f"Received message event: {event}")
             # At first I thought we weren't told about our own messages, but I don't think that's true. Let's make sure we aren't hearing about our own:
             if event['user'] == self.bot_user_id:
@@ -253,8 +262,8 @@ class SlackBot:
                 channel_id = event['channel']
                 user_id = event['user']
                 text = event['text']
-                await self.confirm_message_received(channel_id, message_ts, user_id)
-                await self.respond_to_message(channel_id, thread_ts, user_id, text)
+                await self.confirm_message_received(channel_id, thread_ts, message_ts, user_id)
+                await self.respond_to_message(channel_id, thread_ts, message_ts, user_id, text)
         except Exception as e:
             response = f":exclamation::exclamation::exclamation: Error: {e}"
             logger.exception(response)
