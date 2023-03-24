@@ -55,13 +55,13 @@ class SlackBot:
         print("Looking up bot user_id. (If this fails, something is wrong with the auth)")
         response = await self.app.client.auth_test()
         self.bot_user_id = response["user_id"]
-        self.bot_user_name = await self.get_mention_username(self.bot_user_id)
+        self.bot_user_name = await self.get_username_for_user_id(self.bot_user_id)
         print("Bot user id: ", self.bot_user_id)
         print("Bot user name: ", self.bot_user_name)
 
         await AsyncSocketModeHandler(app, SLACK_APP_TOKEN).start_async()
 
-    async def get_mention_username(self, user_id):
+    async def get_username_for_user_id(self, user_id):
         ret_val = self.id_to_name_cache.get(user_id, None)
         if ret_val is not None:
             return ret_val
@@ -122,18 +122,32 @@ class SlackBot:
 
     async def confirm_message_received(self, channel, thread_ts, user_id_of_sender):
         # React to the message with a thinking face emoji:
-        await self.client.reactions_add(channel=channel, name="thinking_face", timestamp=thread_ts)
-        #await self.reply_to_slack(channel, thread_ts, ":thinking_face: ...")
+        try:
+            await self.client.reactions_add(channel=channel, name="thinking_face", timestamp=thread_ts)
+        except Exception as e:
+            logger.exception(e)
+
+    async def confirm_wont_respond_to_message(self, channel, thread_ts, user_id_of_sender):
+        # React to the message with a see_no_evil emoji:
+        try:
+            await self.client.reactions_add(channel=channel, name="see_no_evil", timestamp=thread_ts)
+        except Exception as e:
+            logger.exception(e)
+
 
     async def respond_to_message(self, channel_id, thread_ts, user_id, text):
         try:
             conversation_ai = self.threads_bot_is_participating_in.get(thread_ts, None)
             if conversation_ai is None:
                 raise Exception("No AI found for thread_ts")
-            text = await self.clean_mentions(text)
-            sender_username = await self.get_mention_username(user_id)
+            text = await self.translate_mentions_to_names(text)
+            sender_username = await self.get_username_for_user_id(user_id)
             response = await conversation_ai.respond(sender_username, text)
-            await self.reply_to_slack(channel_id, thread_ts, response)
+            if (response is None):
+                # Let's just put an emoji on the message to say we aren't responding
+                await self.confirm_wont_respond_to_message(channel_id, thread_ts, user_id)
+            else:
+                await self.reply_to_slack(channel_id, thread_ts, response)
         except Exception as e:
             response = f":exclamation::exclamation::exclamation: Error: {e}"
             # Print a red error to the console:
@@ -144,13 +158,13 @@ class SlackBot:
     def is_parent_thread_message(message_ts, thread_ts):
         return message_ts == thread_ts
 
-    async def clean_mentions(self, text):
+    async def translate_mentions_to_names(self, text):
         # Replace every @mention of a user id with their actual name:
         # First, use a regex to find @mentions that look like <@U123456789>:
         matches = re.findall(r"<@(U[A-Z0-9]+)>", text)
         for match in matches:
             mention_string = f"<@{match}>"
-            mention_name = await self.get_mention_username(match)
+            mention_name = await self.get_username_for_user_id(match)
             if mention_name is not None:
                 text = text.replace(mention_string, "@"+mention_name)
 
@@ -172,14 +186,14 @@ class SlackBot:
             processed_history = []
             for message in thread_history.data['messages']:
                 text = message['text']
-                text = await self.clean_mentions(text)
+                text = await self.translate_mentions_to_names(text)
                 user_id = message['user']
-                #user_name = await self.get_mention_username(user_id)
-                #print(f"Adding message: '{user_name}: {text}")
+                user_name = await self.get_username_for_user_id(user_id)
                 if (user_id == self.bot_user_id):
-                    processed_history.append({"bot":text})
+                    processed_history.append({"bot": text})
                 else:
-                    processed_history.append({"human":text})
+                    # Get the username for this user_id:
+                    processed_history.append({f"{user_name}": text})
 
         ai = ConversationAI(self.bot_user_name, processed_history)
         #ai = ConversationAgentAI(self.bot_user_name, processed_history)
@@ -212,6 +226,12 @@ class SlackBot:
         thread_ts = event.get('thread_ts', message_ts)
         try:
             # {'client_msg_id': '7e605650-8b39-4f61-99c5-795a1168fb7c', 'type': 'message', 'text': 'Hi there Chatterbot', 'user': 'U024LBTMX', 'ts': '1679289332.087509', 'blocks': [{'type': 'rich_text', 'block_id': 'ins/', 'elements': [{'type': 'rich_text_section', 'elements': [{'type': 'text', 'text': 'Hi there Chatterbot'}]}]}], 'team': 'T024LBTMV', 'channel': 'D04V265MYEM', 'event_ts': '1679289332.087509', 'channel_type': 'im'}
+            # It appears to be possible to hear about a message multiple times
+            # We get the message once in the "mention" and then again in the "message"
+            # So if we always get the message event here, shouldn't we ignore the mention event?
+            # We might be able to use the client_msg_id to make sure we don't process the same message twice.
+
+
 
             print(f"Received message event: {event}")
             # At first I thought we weren't told about our own messages, but I don't think that's true. Let's make sure we aren't hearing about our own:
