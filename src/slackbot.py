@@ -3,7 +3,7 @@
 
 import logging
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 import os
 import asyncio
@@ -53,14 +53,15 @@ class SlackBot:
         self.client = self.app.client
         self.id_to_name_cache = {}
         self.user_id_to_info_cache = {}
+        self.messages_being_handled = set()
 
     async def start(self):
         logger.debug("Looking up bot user_id. (If this fails, something is wrong with the auth)")
         response = await self.app.client.auth_test()
         self.bot_user_id = response["user_id"]
         self.bot_user_name = await self.get_username_for_user_id(self.bot_user_id)
-        logger.info("Bot user id: ", self.bot_user_id)
-        logger.info("Bot user name: ", self.bot_user_name)
+        logger.info("Bot user id: "+ self.bot_user_id)
+        logger.info("Bot user name: "+ self.bot_user_name)
 
         await AsyncSocketModeHandler(app, SLACK_APP_TOKEN).start_async()
 
@@ -227,7 +228,7 @@ class SlackBot:
     async def on_app_mention(self, payload, say):
         # If the user mentions us AND we are not already participating in the thread, we should add ourselves to the thread:
         # However, if we are already participating in the thread, we should ignore this message.
-        logger.debug(f"Received mention event: {payload}")
+        logger.info(f"Received mention event: {payload}")
 
         thread_ts = payload.get('thread_ts') or payload.get('ts')
         message_ts = payload.get('ts')
@@ -244,6 +245,10 @@ class SlackBot:
         message_ts = event['ts']
         thread_ts = event.get('thread_ts', message_ts)
         try:
+            if message_ts in self.messages_being_handled:
+              return
+
+            self.messages_being_handled.add(message_ts)
             # {'client_msg_id': '7e605650-8b39-4f61-99c5-795a1168fb7c', 'type': 'message', 'text': 'Hi there Chatterbot', 'user': 'U024LBTMX', 'ts': '1679289332.087509', 'blocks': [{'type': 'rich_text', 'block_id': 'ins/', 'elements': [{'type': 'rich_text_section', 'elements': [{'type': 'text', 'text': 'Hi there Chatterbot'}]}]}], 'team': 'T024LBTMV', 'channel': 'D04V265MYEM', 'event_ts': '1679289332.087509', 'channel_type': 'im'}
             # It appears to be possible to hear about a message multiple times
             # We get the message once in the "mention" and then again in the "message"
@@ -251,7 +256,7 @@ class SlackBot:
             # We might be able to use the client_msg_id to make sure we don't process the same message twice.
 
 
-            logger.debug(f"Received message event: {event}")
+            logger.info(f"Received message event: {event}")
             # At first I thought we weren't told about our own messages, but I don't think that's true. Let's make sure we aren't hearing about our own:
             if event.get('user', None) == self.bot_user_id:
                 logger.debug("Not handling message event since I sent the message.")
@@ -311,18 +316,18 @@ slack_bot = SlackBot(app)
 
 @app.event('app_mention')
 async def on_app_mention(payload, say):
-    logger.debug("Processing app_mention...")
+    logger.info("Processing app_mention...")
     await slack_bot.on_app_mention(payload, say)
 
 @app.event("message")
 async def on_message(payload, say):
-    logger.debug("Processing message...")
+    logger.info("Processing message...")
     await slack_bot.on_message(payload, say)
 
 # Define event handler for user joining a channel
 @app.event("member_joined_channel")
 async def handle_member_joined_channel(event_data):
-    logger.debug("Processing member_joined_channel event", event_data)
+    logger.info("Processing member_joined_channel event", event_data)
     await slack_bot.on_member_joined_channel(event_data)
 
 async def start():
