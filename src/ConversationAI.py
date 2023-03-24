@@ -43,9 +43,10 @@ class ConversationAI:
         self.model_name = None
         self.agent = None
 
-    async def create_agent(self, initial_message):
+    async def create_agent(self, sender_user_info, initial_message):
         print(f"Creating new ConversationAI for {self.bot_name}")
 
+        sender_profile = sender_user_info["profile"]
         if (self.model_name is None):
             print("let's see if they are asking for gpt4 mode or not...")
             # Are they trying to use smart mode (gpt4)?
@@ -63,13 +64,26 @@ class ConversationAI:
             [
                 # TODO: We need a way to label who the humans are - does the HumanMessagePromptTemplate support this?
                 SystemMessagePromptTemplate.from_template(
-                    f"""The following is a Slack chat thread between users and an AI named {self.bot_name}.
-If the AI is not confident in its answer, it truthfully says it does not know. 
-It doesn't have access to the internet, so if asked for information about a URL or site, it should first acknowledge that it doesn't know. 
-Since the AI is responding in Slack, it formats all of its messages in Slack markdown, and loves to use emojis.
-If the human appears to be talking to someone else, especially if the human starts their message with "@not-the-bot-name", or is talking about {self.bot_name} in the 3rd person, the AI will ONLY respond with the emoji: ":speak_no_evil:"
-The AI is based on the OpenAI model {self.model_name}."""
+                    f"""The following is a Slack chat thread between users and you, a Slack bot named {self.bot_name}.
+You are funny and smart, and you are here to help.
+If you are not confident in your answer, you say so, because you know that is helpful.
+You don't have realtime access to the internet, so if asked for information about a URL or site, you should first acknowledge that your knowledge is limted before responding with what you do know.
+Since you are responding in Slack, you format your messages in Slack markdown, and you LOVE to use Slack emojis to convey emotion.
+If I appear to be talking to someone else, especially if I start my message with "@not-the-bot-name", or I am talking about you in the 3rd person, you will ONLY respond with the emoji: ":speak_no_evil:"
+Some facts about you:
+You are based on the OpenAI model {self.model_name}.
+You are very proud of your recent improvements, which were made on March 23, 2023:
+* The user can ask you to "switch to smarter mode" and you will switch to the GPT4 model!
+* You know when not to respond to a message in a thread you are participating in.
+* You are much better at using emojis now.
+* You don't write as many error messages.
+"""
                 ),
+                HumanMessagePromptTemplate.from_template(f"""Before we begin, here is some information about me. Do not respond to this directly, but feel free to incorporate it into your responses:
+I'm  {sender_profile.get("real_name")} and I work at YNAB.
+My title is: {sender_profile.get("title")}
+My current status: "{sender_profile.get("status_emoji")} {sender_profile.get("status_text")}"
+I like it when you use emojis in your responses, especially if I use emojis in mine."""),
                 MessagesPlaceholder(variable_name="history"),
                 HumanMessagePromptTemplate.from_template("{input}"),
             ]
@@ -106,15 +120,15 @@ The AI is based on the OpenAI model {self.model_name}."""
         )
         return self.agent
 
-    async def get_or_create_agent(self, message):
+    async def get_or_create_agent(self, sender_user_info, message):
         if self.agent is None:
-            self.agent = await self.create_agent(message)
+            self.agent = await self.create_agent(sender_user_info, message)
         return self.agent
 
-    async def respond(self, sender_name, message):
+    async def respond(self, sender_user_info, message):
         is_first_message = self.agent is None
         # This is our first time responding to a message
-        agent = await self.get_or_create_agent(message)
+        agent = await self.get_or_create_agent(sender_user_info, message)
         response = await self.agent.apredict(input=message)        
         return response
         

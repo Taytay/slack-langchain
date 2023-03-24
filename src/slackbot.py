@@ -35,7 +35,7 @@ stub = modal.Stub(
 )
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 load_dotenv(Path(parent_folder) / ".env")
 
@@ -50,31 +50,37 @@ class SlackBot:
         self.app = slack_app
         self.client = self.app.client
         self.id_to_name_cache = {}
+        self.user_id_to_info_cache = {}
 
     async def start(self):
-        print("Looking up bot user_id. (If this fails, something is wrong with the auth)")
+        logger.debug("Looking up bot user_id. (If this fails, something is wrong with the auth)")
         response = await self.app.client.auth_test()
         self.bot_user_id = response["user_id"]
         self.bot_user_name = await self.get_username_for_user_id(self.bot_user_id)
-        print("Bot user id: ", self.bot_user_id)
-        print("Bot user name: ", self.bot_user_name)
+        logger.info("Bot user id: ", self.bot_user_id)
+        logger.info("Bot user name: ", self.bot_user_name)
 
         await AsyncSocketModeHandler(app, SLACK_APP_TOKEN).start_async()
 
-    async def get_username_for_user_id(self, user_id):
-        ret_val = self.id_to_name_cache.get(user_id, None)
-        if ret_val is not None:
-            return ret_val
+    async def get_user_info_for_user_id(self, user_id):
+        user_info = self.user_id_to_info_cache.get(user_id, None)
+        if user_info is not None:
+            return user_info
         
-        print("Getting username for user_id: ", user_id)
         user_info_response = await self.app.client.users_info(user=user_id)
         user_info = user_info_response['user']
-        ret_val = None
+        logger.debug(user_info)
+        self.user_id_to_info_cache[user_id] = user_info
+        return user_info
+
+    async def get_username_for_user_id(self, user_id):
+        user_info = await self.get_user_info_for_user_id(user_id)
+        profile = user_info['profile']
         if (user_info['is_bot']):
-            ret_val = user_info_response['user']['profile']['real_name']
+            ret_val = profile['real_name']
         else:
-            ret_val = user_info_response['user']['profile']['display_name']
-        self.id_to_name_cache[user_id] = ret_val
+            ret_val = profile['display_name']
+
         return ret_val
 
     async def upload_snippets(self, channel_id, thread_ts, response):
@@ -147,12 +153,13 @@ class SlackBot:
 
     async def respond_to_message(self, channel_id, thread_ts, message_ts, user_id, text):
         try:
-            conversation_ai = self.threads_bot_is_participating_in.get(thread_ts, None)
+            conversation_ai: ConversationAI = self.threads_bot_is_participating_in.get(thread_ts, None)
             if conversation_ai is None:
                 raise Exception("No AI found for thread_ts")
             text = await self.translate_mentions_to_names(text)
-            sender_username = await self.get_username_for_user_id(user_id)
-            response = await conversation_ai.respond(sender_username, text)
+            #sender_username = await self.get_username_for_user_id(user_id)
+            sender_user_info = await self.get_user_info_for_user_id(user_id)
+            response = await conversation_ai.respond(sender_user_info, text)
             if (response is None):
                 # Let's just put an emoji on the message to say we aren't responding
                 await self.confirm_wont_respond_to_message(channel_id, thread_ts, message_ts, user_id)
@@ -162,7 +169,7 @@ class SlackBot:
             response = f":exclamation::exclamation::exclamation: Error: {e}"
             # Print a red error to the console:
             logger.exception(response)
-            await self.reply_to_slack(channel_id, thread_ts, response)
+            await self.reply_to_slack(channel_id, thread_ts, message_ts, response)
 
     @staticmethod
     def is_parent_thread_message(message_ts, thread_ts):
@@ -187,7 +194,7 @@ class SlackBot:
         processed_history = None
         # Is this thread_ts the very first message in the thread? If so, we need to create a new AI for it.
         if not self.is_parent_thread_message(message_ts, thread_ts):
-            print("It looks like I am not the first message in the thread. I should get the full thread history from Slack and add it to my memory.")
+            logger.debug("It looks like I am not the first message in the thread. I should get the full thread history from Slack and add it to my memory.")
             # This is not the very first message in the thread
             # We should figure out a way to boostrap the memory:
             # Get the full thread history from Slack:
@@ -218,7 +225,7 @@ class SlackBot:
     async def on_app_mention(self, payload, say):
         # If the user mentions us AND we are not already participating in the thread, we should add ourselves to the thread:
         # However, if we are already participating in the thread, we should ignore this message.
-        print(f"Received mention event: {payload}")
+        logger.debug(f"Received mention event: {payload}")
 
         thread_ts = payload.get('thread_ts') or payload.get('ts')
         message_ts = payload.get('ts')
@@ -242,10 +249,10 @@ class SlackBot:
             # We might be able to use the client_msg_id to make sure we don't process the same message twice.
 
 
-            print(f"Received message event: {event}")
+            logger.debug(f"Received message event: {event}")
             # At first I thought we weren't told about our own messages, but I don't think that's true. Let's make sure we aren't hearing about our own:
             if event['user'] == self.bot_user_id:
-                print("Not handling message event since I sent the message.")
+                logger.debug("Not handling message event since I sent the message.")
                 return
             #if 'thread_ts' in event and 'subtype' not in event:
 
@@ -275,12 +282,12 @@ slack_bot = SlackBot(app)
 
 @app.event('app_mention')
 async def on_app_mention(payload, say):
-    print("Processing app_mention...")
+    logger.debug("Processing app_mention...")
     await slack_bot.on_app_mention(payload, say)
 
 @app.event("message")
 async def on_message(payload, say):
-    print("Processing message...")
+    logger.debug("Processing message...")
     await slack_bot.on_message(payload, say)
 
 async def start():
