@@ -32,7 +32,7 @@ pip install -r requirements-dev.txt
 - [x] Create a dev and staging bot that runs the bot with a different name in Slack
 - [ ] Switch to use a different type of memory, like token buffer: https://langchain.readthedocs.io/en/latest/modules/memory/types/token_buffer.html
 - [x] Get rid of the error that happens when a system message happens and there isn't a "user" field.
-- [ ] Welcome people to the channel via something creative
+- [x] Welcome people to the channel via something creative
 - [ ] On a regular basis (daily?), have Chatterbot say something interesting
 - [ ] Notify the user if GPT is being slow...
 - [ ] Usernames and Embed profile information about the people chatting with Chatterbot, if it hasn't already seen them before

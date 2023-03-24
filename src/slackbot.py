@@ -271,7 +271,6 @@ class SlackBot:
                 user_id = event['user']
                 text = event['text']
 
-                await self.on_member_joined_channel(event)
                 await self.confirm_message_received(channel_id, thread_ts, message_ts, user_id)
                 await self.respond_to_message(channel_id, thread_ts, message_ts, user_id, text)
         except Exception as e:
