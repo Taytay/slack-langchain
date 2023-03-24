@@ -2,6 +2,9 @@
 
 
 import logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.DEBUG)
+
 import os
 import asyncio
 from slack_sdk.errors import SlackApiError
@@ -35,8 +38,6 @@ stub = modal.Stub(
     secrets=[modal.Secret.from_name("slackbot_ynai")],
 )
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
 
 load_dotenv(Path(parent_folder) / ".env")
 
@@ -252,7 +253,7 @@ class SlackBot:
 
             logger.debug(f"Received message event: {event}")
             # At first I thought we weren't told about our own messages, but I don't think that's true. Let's make sure we aren't hearing about our own:
-            if event['user'] == self.bot_user_id:
+            if event.get('user', None) == self.bot_user_id:
                 logger.debug("Not handling message event since I sent the message.")
                 return
             #if 'thread_ts' in event and 'subtype' not in event:
