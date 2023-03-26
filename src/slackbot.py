@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-
-
 import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -13,31 +11,14 @@ from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from dotenv import load_dotenv
 import re
 from pathlib import Path
-
 from ConversationAI import ConversationAI
 from llm_wrappers import get_simple_response
 from langchain import OpenAI
-import modal
 
 # Get the folder this file is in:
 this_file_folder = os.path.dirname(os.path.realpath(__file__))
 # Get the parent folder of this file's folder:
 parent_folder = os.path.dirname(this_file_folder)
-
-
-image = modal.Image.debian_slim().pip_install(
-    "openai",
-    "slack_bolt",
-    "python-dotenv",
-    "langchain==0.0.115"
-)
-
-stub = modal.Stub(
-    name="slackbot",
-    image=image,
-    secrets=[modal.Secret.from_name("slackbot_ynai")],
-)
-
 
 load_dotenv(Path(parent_folder) / ".env")
 
@@ -53,7 +34,6 @@ class SlackBot:
         self.client = self.app.client
         self.id_to_name_cache = {}
         self.user_id_to_info_cache = {}
-        self.messages_being_handled = set()
 
     async def start(self):
         logger.debug("Looking up bot user_id. (If this fails, something is wrong with the auth)")
@@ -229,10 +209,6 @@ class SlackBot:
         message_ts = event['ts']
         thread_ts = event.get('thread_ts', message_ts)
         try:
-            if message_ts in self.messages_being_handled:
-              return
-
-            self.messages_being_handled.add(message_ts)
             # {'client_msg_id': '7e605650-8b39-4f61-99c5-795a1168fb7c', 'type': 'message', 'text': 'Hi there Chatterbot', 'user': 'U024LBTMX', 'ts': '1679289332.087509', 'blocks': [{'type': 'rich_text', 'block_id': 'ins/', 'elements': [{'type': 'rich_text_section', 'elements': [{'type': 'text', 'text': 'Hi there Chatterbot'}]}]}], 'team': 'T024LBTMV', 'channel': 'D04V265MYEM', 'event_ts': '1679289332.087509', 'channel_type': 'im'}
 
             logger.info(f"Received message event: {event}")
@@ -325,15 +301,4 @@ async def start():
     await slack_bot.start()
 
 if __name__ == "__main__":
-    asyncio.run(start())
-
-# The following is for modal.com:
-@stub.webhook(
-    method="GET"
-)
-def status(request):
-    return "Good!"
-
-@stub.local_entrypoint
-def main():
     asyncio.run(start())
