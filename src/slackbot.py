@@ -160,7 +160,6 @@ class SlackBot:
             if conversation_ai is None:
                 raise Exception("No AI found for thread_ts")
             text = await self.translate_mentions_to_names(text)
-            #sender_username = await self.get_username_for_user_id(user_id)
             sender_user_info = await self.get_user_info_for_user_id(user_id)
             response = await conversation_ai.respond(sender_user_info, text)
             if (response is None):
@@ -216,8 +215,6 @@ class SlackBot:
                     processed_history.append({f"{user_name}": text})
 
         ai = ConversationAI(self.bot_user_name, processed_history)
-        #ai = ConversationAgentAI(self.bot_user_name, processed_history)
-
         self.threads_bot_is_participating_in[thread_ts] = ai
 
     def is_ai_participating_in_thread(self, thread_ts, message_ts):
@@ -225,21 +222,8 @@ class SlackBot:
             return True
         return False
 
-    async def on_app_mention(self, payload, say):
-        # If the user mentions us AND we are not already participating in the thread, we should add ourselves to the thread:
-        # However, if we are already participating in the thread, we should ignore this message.
-        logger.info(f"Received mention event: {payload}")
-
-        thread_ts = payload.get('thread_ts') or payload.get('ts')
-        message_ts = payload.get('ts')
-        channel_id = payload.get('channel')
-        if self.is_ai_participating_in_thread(thread_ts, message_ts):
-            # We're already in this thread - nothing to do. The other handler will take it from here!
-            return
-        
-        # Let's add ourselves to this thread and pass the message to the other handler:
-        await self.add_ai_to_thread(channel_id, thread_ts, message_ts)
-        await self.on_message(payload, say)
+    def is_bot_mentioned(self, text):
+        return f"<@{self.bot_user_id}>" in text
 
     async def on_message(self, event, say):
         message_ts = event['ts']
@@ -250,33 +234,32 @@ class SlackBot:
 
             self.messages_being_handled.add(message_ts)
             # {'client_msg_id': '7e605650-8b39-4f61-99c5-795a1168fb7c', 'type': 'message', 'text': 'Hi there Chatterbot', 'user': 'U024LBTMX', 'ts': '1679289332.087509', 'blocks': [{'type': 'rich_text', 'block_id': 'ins/', 'elements': [{'type': 'rich_text_section', 'elements': [{'type': 'text', 'text': 'Hi there Chatterbot'}]}]}], 'team': 'T024LBTMV', 'channel': 'D04V265MYEM', 'event_ts': '1679289332.087509', 'channel_type': 'im'}
-            # It appears to be possible to hear about a message multiple times
-            # We get the message once in the "mention" and then again in the "message"
-            # So if we always get the message event here, shouldn't we ignore the mention event?
-            # We might be able to use the client_msg_id to make sure we don't process the same message twice.
-
 
             logger.info(f"Received message event: {event}")
             # At first I thought we weren't told about our own messages, but I don't think that's true. Let's make sure we aren't hearing about our own:
             if event.get('user', None) == self.bot_user_id:
                 logger.debug("Not handling message event since I sent the message.")
                 return
-            #if 'thread_ts' in event and 'subtype' not in event:
 
+            start_participating_if_not_already = False
             channel_id = event['channel']
             # Is this message part of an im?
             channel_type = event.get('channel_type', None)
             if channel_type and channel_type == "im":
                 # This is a direct message. So of course we should be participating if we are not
-                if not self.is_ai_participating_in_thread(thread_ts, message_ts):
-                    await self.add_ai_to_thread(channel_id, thread_ts, message_ts)
+                start_participating_if_not_already = True
+            # else if this is a message in a channel:
+            elif self.is_bot_mentioned(event['text']):
+                # This is a message in a channel, but it mentions us. So we should be participating if we are not
+                start_participating_if_not_already = True
 
-            # And are we participating in it?
+            if start_participating_if_not_already:
+                await self.add_ai_to_thread(channel_id, thread_ts, message_ts)
+
+            # And now, are we participating in it?
             if self.is_ai_participating_in_thread(thread_ts, message_ts):
-                channel_id = event['channel']
                 user_id = event['user']
                 text = event['text']
-
                 await self.confirm_message_received(channel_id, thread_ts, message_ts, user_id)
                 await self.respond_to_message(channel_id, thread_ts, message_ts, user_id, text)
         except Exception as e:
@@ -314,11 +297,6 @@ app = AsyncApp(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
 client = app.client
 slack_bot = SlackBot(app)
 
-@app.event('app_mention')
-async def on_app_mention(payload, say):
-    logger.info("Processing app_mention...")
-    await slack_bot.on_app_mention(payload, say)
-
 @app.event("message")
 async def on_message(payload, say):
     logger.info("Processing message...")
@@ -329,6 +307,19 @@ async def on_message(payload, say):
 async def handle_member_joined_channel(event_data):
     logger.info("Processing member_joined_channel event", event_data)
     await slack_bot.on_member_joined_channel(event_data)
+
+@app.event('reaction_added')
+async def on_reaction_added(payload):
+    logger.info("Ignoring reaction_added")
+
+@app.event('reaction_removed')
+async def on_reaction_removed(payload):
+    logger.info("Ignoring reaction_removed")
+
+@app.event('app_mention')
+async def on_app_mention(payload, say):
+    logger.info("Ignoring app_mention in favor of handling it via the message handler...")
+
 
 async def start():
     await slack_bot.start()
