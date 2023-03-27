@@ -15,6 +15,9 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+from slack_bolt.async_app import AsyncApp
+from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
+from .ConversationAI import ConversationAI
 
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")

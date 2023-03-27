@@ -17,7 +17,7 @@ from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 #https://langchain.readthedocs.io/en/latest/modules/memory/examples/adding_memory_chain_multiple_inputs.html
 # People talking about the parsing error: https://github.com/hwchase17/langchain/issues/1657
 
-from AsyncStreamingSlackCallbackHandler import AsyncStreamingSlackCallbackHandler
+from .AsyncStreamingSlackCallbackHandler import AsyncStreamingSlackCallbackHandler
 
 
 class CustomConversationAgent(Agent):
@@ -115,7 +115,7 @@ Please try to "tone-match" me. If I use emojis, please use lots of emojis. If I 
         # TODO: Configure this outside of the class
         self.callbackHandler = AsyncStreamingSlackCallbackHandler(self.slack_client)
 
-        llm = ChatOpenAI(model_name = self.model_name, temperature=self.model_temperature, request_timeout=60, max_retries=3, model_name=self.model_name, streaming=True, callback_manager=AsyncCallbackManager([self.callbackHandler]))
+        llm = ChatOpenAI(model_name = self.model_name, temperature=self.model_temperature, request_timeout=60, max_retries=3, verbose=True, streaming=True, callback_manager=AsyncCallbackManager([self.callbackHandler]))
         # This buffer memory can be set to an arbitrary buffer
         memory = ConversationBufferMemory(return_messages=True)
 
