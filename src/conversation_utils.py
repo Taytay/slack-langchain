@@ -32,15 +32,14 @@ class Output(BaseModel):
     generations: List[List[Generation]]
     llm_output: LlmOutput
 
-llm_babbage = OpenAI(temperature=0, model_name="babbage", request_timeout=30, max_retries=2)
-llm_curie = OpenAI(temperature=0, model_name="curie", request_timeout=30, max_retries=2)
-llm_davinci = OpenAI(temperature=0, model_name="davinci", request_timeout=30, max_retries=2)
+# llm_babbage = OpenAI(temperature=0, model_name="babbage", request_timeout=30, max_retries=2)
+# llm_curie = OpenAI(temperature=0, model_name="curie", request_timeout=30, max_retries=2)
+# llm_davinci = OpenAI(temperature=0, model_name="davinci", request_timeout=30, max_retries=2)
 llm_gpt3_turbo = OpenAI(temperature=0, model_name="gpt-3.5-turbo-0301", request_timeout=30, max_retries=3, verbose=True)
-llm_gpt4 = OpenAI(temperature=0, model_name="gpt4", request_timeout=30, max_retries=2, verbose=True)
+# llm_gpt4 = OpenAI(temperature=0, model_name="gpt4", request_timeout=30, max_retries=2, verbose=True)
 
 async def get_simple_response(input:str) -> Output:
   return await llm_gpt3_turbo.agenerate([input],)
-
 
 # TODO: Use agents to do this call and parsing, and combine these two prompts:
 

@@ -21,4 +21,5 @@ async def start():
     await slack_bot.start()
 
 if __name__ == "__main__":
+    print("About to start...")
     asyncio.run(start())

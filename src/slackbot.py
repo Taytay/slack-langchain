@@ -3,6 +3,7 @@
 # TODO: How is logging normally controlled?
 import logging
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 import os
 from slack_bolt.async_app import AsyncApp
@@ -25,7 +26,7 @@ class SlackBot:
         self.user_id_to_info_cache = {}
 
     async def start(self):
-        logger.debug("Looking up bot user_id. (If this fails, something is wrong with the auth)")
+        logger.info("Looking up bot user_id. (If this fails, something is wrong with the auth)")
         response = await self.app.client.auth_test()
         self.bot_user_id = response["user_id"]
         self.bot_user_name = await self.get_username_for_user_id(self.bot_user_id)
