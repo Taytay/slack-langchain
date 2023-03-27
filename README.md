@@ -28,14 +28,14 @@ pip install -r requirements-dev.txt
 - [x] Deploy the bot to Railway
 - [x] Make the bot respond with markdown
 - [ ] Use Redis for permanent memory
-- [ ] Use OpenAI streaming to generate text
+- [x] Use OpenAI streaming to generate text
 - [x] Create a dev and staging bot that runs the bot with a different name in Slack
 - [ ] Switch to use a different type of memory, like token buffer: https://langchain.readthedocs.io/en/latest/modules/memory/types/token_buffer.html
 - [x] Get rid of the error that happens when a system message happens and there isn't a "user" field.
 - [x] Welcome people to the channel via something creative
 - [ ] On a regular basis (daily?), have Chatterbot say something interesting
 - [ ] Notify the user if GPT is being slow...
-- [ ] Usernames and Embed profile information about the people chatting with Chatterbot, if it hasn't already seen them before
+- [x] Usernames and Embed profile information about the people chatting with Chatterbot, if it hasn't already seen them before
 - [ ] Use Slack-Machine as the framework
 - [x] Make Chatterbot not respond if it is not being spoken to directly
 - [ ] ~Have a "Bot is typing..." message or some other indicator...~ (Also turns out this is impossible)
