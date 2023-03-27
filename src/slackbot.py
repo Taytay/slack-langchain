@@ -1,26 +1,15 @@
 #!/usr/bin/env python3
+
+# TODO: How is logging normally controlled?
 import logging
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 import os
-import asyncio
-from slack_sdk.errors import SlackApiError
 from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
-from dotenv import load_dotenv
 import re
-from pathlib import Path
 from ConversationAI import ConversationAI
-from llm_wrappers import get_simple_response
 from langchain import OpenAI
-
-# Get the folder this file is in:
-this_file_folder = os.path.dirname(os.path.realpath(__file__))
-# Get the parent folder of this file's folder:
-parent_folder = os.path.dirname(this_file_folder)
-
-load_dotenv(Path(parent_folder) / ".env")
 
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
@@ -108,11 +97,13 @@ class SlackBot:
         # ```
         # And we could upload it to Slack as a file and then link to it in the response.
         # Let's try something - if they have an emoji, and only an emoji, in the response, let's react to the message with that emoji:
-        # regex for slack emoji:
-        slack_emoji_regex = r":[a-z0-9_+-]+:"
+        # regex for slack emoji to ensure that the _entire_ message only consists of a single emoji:
+        slack_emoji_regex = r"^:[a-z0-9_+-]+:$"
         if re.match(slack_emoji_regex, response.strip()):
             try:
-                await self.client.reactions_add(channel=channel_id, name=response.strip().replace(":", ""), timestamp=message_ts)
+                emoji_name=response.strip().replace(":", "")
+                logger.info("Responding with single emoji: "+emoji_name)
+                await self.client.reactions_add(channel=channel_id, name=emoji_name, timestamp=message_ts)
             except Exception as e:
                 logger.exception(e)
             return
@@ -295,10 +286,3 @@ async def on_reaction_removed(payload):
 @app.event('app_mention')
 async def on_app_mention(payload, say):
     logger.info("Ignoring app_mention in favor of handling it via the message handler...")
-
-
-async def start():
-    await slack_bot.start()
-
-if __name__ == "__main__":
-    asyncio.run(start())
