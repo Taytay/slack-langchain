@@ -1,26 +1,30 @@
 #!/usr/bin/env python3
 import logging
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
-
+import time
 import os
 import asyncio
-from slack_sdk.errors import SlackApiError
-from slack_bolt.async_app import AsyncApp
-from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from dotenv import load_dotenv
 import re
 from pathlib import Path
-from ConversationAI import ConversationAI
-from llm_wrappers import get_simple_response
-from langchain import OpenAI
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 # Get the folder this file is in:
 this_file_folder = os.path.dirname(os.path.realpath(__file__))
 # Get the parent folder of this file's folder:
 parent_folder = os.path.dirname(this_file_folder)
 
+print("loading .env from: " + str(Path(parent_folder) / ".env"))
 load_dotenv(Path(parent_folder) / ".env")
+
+from slack_sdk.errors import SlackApiError
+from slack_bolt.async_app import AsyncApp
+from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
+from ConversationAI import ConversationAI
+from llm_wrappers import get_simple_response
+from langchain import OpenAI
+
 
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
@@ -141,12 +145,14 @@ class SlackBot:
                 raise Exception("No AI found for thread_ts")
             text = await self.translate_mentions_to_names(text)
             sender_user_info = await self.get_user_info_for_user_id(user_id)
-            response = await conversation_ai.respond(sender_user_info, text)
+            response = await conversation_ai.respond(sender_user_info, channel_id, thread_ts, message_ts, text)
             if (response is None):
                 # Let's just put an emoji on the message to say we aren't responding
                 await self.confirm_wont_respond_to_message(channel_id, thread_ts, message_ts, user_id)
             else:
-                await self.reply_to_slack(channel_id, thread_ts, message_ts, response)
+                print("Not writing anything since the streaming thing is doing it")
+                # Let's assume the streaming thing did it
+                # await self.reply_to_slack(channel_id, thread_ts, message_ts, response)
         except Exception as e:
             response = f":exclamation::exclamation::exclamation: Error: {e}"
             # Print a red error to the console:
@@ -253,6 +259,7 @@ class SlackBot:
         profile = user_info.get("profile", {})
         llm_gpt3_turbo = OpenAI(temperature=1, model_name="gpt-3.5-turbo", request_timeout=30, max_retries=5, verbose=True)
 
+        # TODO: Extract into yaml file instead:
         welcome_message = (await llm_gpt3_turbo.agenerate([f"""
 You are a funny and creative slackbot {self.bot_user_name}
 Someone just joined a Slack channel you are a member of, and you want to welcome them creatively and in a way that will make them feel special.
@@ -272,6 +279,30 @@ Afterwards, tell the user that you look forward to "chatting" with them, and tel
 app = AsyncApp(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
 client = app.client
 slack_bot = SlackBot(app)
+
+
+# @app.event("app_mention")
+# async def command_handler(body, say):
+#     event = body['event']
+#     text = event['text']
+
+#     message = "This is a sample message with words appearing one by one."
+#     try:
+#         response = await say(' ')  # Send an empty message and get the timestamp
+#         ts = response['ts']  # Get the timestamp of the message
+#         channel = event['channel']
+        
+#         current_message = ""
+#         for word in message.split():
+#             current_message += f"{word} "
+#             try:
+#                 await client.chat_update(channel=channel, ts=ts, text=current_message.strip())
+#             except SlackApiError as e:
+#                 print(f"Error updating message: {e}")
+#             time.sleep(0.01)  # Pause for 1 second before updating the message with the next word
+            
+#     except SlackApiError as e:
+#         print(f"Error sending initial message: {e}")
 
 @app.event("message")
 async def on_message(payload, say):

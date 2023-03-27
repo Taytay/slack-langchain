@@ -10,9 +10,13 @@ from langchain.prompts import (ChatPromptTemplate, HumanMessagePromptTemplate,
 from langchain.utilities import GoogleSerperAPIWrapper, SerpAPIWrapper
 from llm_wrappers import is_asking_for_smart_mode
 from langchain.schema import AIMessage, BaseMemory, BaseMessage, HumanMessage
+from langchain.callbacks.base import AsyncCallbackManager
+from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 # How to do a search over docs with conversation:
 #https://langchain.readthedocs.io/en/latest/modules/memory/examples/adding_memory_chain_multiple_inputs.html
 # People talking about the parsing error: https://github.com/hwchase17/langchain/issues/1657
+
+from AsyncStreamingSlackCallbackHandler import AsyncStreamingSlackCallbackHandler
 
 
 class CustomConversationAgent(Agent):
@@ -35,13 +39,14 @@ class CustomConversationAgent(Agent):
 
 class ConversationAI:
     def __init__(
-        self, bot_name, existing_thread_history=None, model_name=None
+        self, bot_name, slack_client, existing_thread_history=None, model_name=None
     ):
 
         self.bot_name = bot_name
         self.existing_thread_history = existing_thread_history
         self.model_name = None
         self.agent = None
+        self.slack_client = slack_client
 
     async def create_agent(self, sender_user_info, initial_message):
         print(f"Creating new ConversationAI for {self.bot_name}")
@@ -54,7 +59,7 @@ class ConversationAI:
                 print("Yes! They were!")
                 self.model_name = "gpt4"
             else:
-                print("Nope - business as usual...")
+                print("Nope - will use the default GPT model...")
         
         if (self.model_name is None):
             self.model_name = "gpt-3.5-turbo"
@@ -63,6 +68,7 @@ class ConversationAI:
         prompt = ChatPromptTemplate.from_messages(
             [
                 # TODO: We need a way to label who the humans are - does the HumanMessagePromptTemplate support this?
+                # TODO: Extract this prompt out of this file
                 SystemMessagePromptTemplate.from_template(
                     f"""The following is a Slack chat thread between users and you, a Slack bot named {self.bot_name}.
 You are funny and smart, and you are here to help.
@@ -91,7 +97,10 @@ I like it when you use emojis in your responses, especially if I use emojis in m
 
         # TODO: Allow us to turn up or down the temperature of the bot
         # 30s ought to be enough...
-        llm = ChatOpenAI(temperature=0.2, request_timeout=30, max_retries=3)
+        # TODO: Configure this outside of the class
+        self.callbackHandler = AsyncStreamingSlackCallbackHandler(self.slack_client)
+
+        llm = ChatOpenAI(temperature=0.2, request_timeout=30, max_retries=3, model_name=self.model_name, streaming=True, callback_manager=AsyncCallbackManager([self.callbackHandler]))
         # This buffer memory can be set to an arbitrary buffer
         memory = ConversationBufferMemory(return_messages=True)
 
@@ -125,11 +134,15 @@ I like it when you use emojis in your responses, especially if I use emojis in m
             self.agent = await self.create_agent(sender_user_info, message)
         return self.agent
 
-    async def respond(self, sender_user_info, message):
+    async def respond(self, sender_user_info, channel_id:str, thread_ts:str, message_being_responded_to_ts:str, message:str):
         is_first_message = self.agent is None
         # This is our first time responding to a message
         agent = await self.get_or_create_agent(sender_user_info, message)
-        response = await self.agent.apredict(input=message)        
+        # TODO: This is messy and needs to be refactored...
+        print("Starting response...")
+        self.callbackHandler.start_new_response(channel_id, thread_ts)
+        # Now that we have a handler set up, just telling it to predict is sufficient to get it to start streaming the message response...
+        response = await self.agent.apredict(input=message)
         return response
         
 def get_conversational_agent(model_name="gpt-3.5-turbo"):
