@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+
+print("here in main.py")
 import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -7,6 +9,8 @@ import asyncio
 import os
 from dotenv import load_dotenv
 from pathlib import Path
+
+print("After imports")
 
 # Get the folder this file is in:
 this_file_folder = os.path.dirname(os.path.realpath(__file__))
