@@ -17,11 +17,13 @@ from langchain import OpenAI
 from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from .ConversationAI import ConversationAI
+from slack_sdk.errors import SlackApiError
 
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
 SLACK_APP_TOKEN = os.environ.get('SLACK_APP_TOKEN')
 SLACK_SIGNING_SECRET = os.environ.get("SLACK_SIGNING_SECRET")
+
 
 class SlackBot:
     def __init__(self, slack_app: AsyncApp):
@@ -143,10 +145,7 @@ class SlackBot:
             if (response is None):
                 # Let's just put an emoji on the message to say we aren't responding
                 await self.confirm_wont_respond_to_message(channel_id, thread_ts, message_ts, user_id)
-            else:
-                print("Not writing anything since the streaming thing is doing it")
-                # Let's assume the streaming thing did it
-                # await self.reply_to_slack(channel_id, thread_ts, message_ts, response)
+            # We don't respond here since the bot is streaming responses
         except Exception as e:
             response = f":exclamation::exclamation::exclamation: Error: {e}"
             # Print a red error to the console:
@@ -183,7 +182,10 @@ class SlackBot:
             thread_history = await client.conversations_replies(channel=channel_id, ts=thread_ts)
             # Iterate through the thread history, adding each of these to the ai_memory:
             processed_history = []
-            for message in thread_history.data['messages']:
+            message_history = thread_history.data['messages']
+            # Get rid of the last message from the histroy since it's the message we're responding to:
+            message_history = message_history[:-1]
+            for message in message_history:
                 text = message['text']
                 text = await self.translate_mentions_to_names(text)
                 user_id = message['user']
@@ -296,3 +298,30 @@ async def on_reaction_removed(payload):
 @app.event('app_mention')
 async def on_app_mention(payload, say):
     logger.info("Ignoring app_mention in favor of handling it via the message handler...")
+
+# This will take too long - maybe at some point we can do this and save it off somewhere
+async def getCommonCustomEmojis(num_to_retrieve: int = 40):
+    # Call the emoji.list API method to retrieve the list of custom emojis
+    try:
+        response = await client.emoji_list()
+        emoji_list = response["emoji"]
+    except SlackApiError as e:
+        print("Error retrieving custom emojis: {}".format(e))
+
+    # Retrieve the usage count for each custom emoji
+    emoji_counts = []
+    for emoji in emoji_list:
+        try:
+            response = await client.emoji_get(name=emoji)
+            count = response["emoji"]["usage_count"]
+            emoji_counts.append((emoji, count))
+        except SlackApiError as e:
+            print("Error retrieving usage count for emoji {}: {}".format(emoji, e))
+
+    # Sort the list of custom emojis by usage count in descending order
+    emoji_counts.sort(key=lambda x: x[1], reverse=True)
+
+    # Retrieve the num_to_retrieve most commonly used custom emojis
+    most_common_emojis = [emoji for emoji, count in emoji_counts[:num_to_retrieve]]
+
+    return most_common_emojis

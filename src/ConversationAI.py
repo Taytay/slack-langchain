@@ -60,6 +60,8 @@ class ConversationAI:
 
         sender_profile = sender_user_info["profile"]
 
+        # TODO: If we are picking up from where a previous thread left off, we shouldn't be looking at the initial message the same way, and should use the original message as the "initial message"
+
         # Call both async methods simultaneously
         smart_mode_task = asyncio.create_task(is_asking_for_smart_mode(initial_message))
         recommended_temperature_task = asyncio.create_task(get_recommended_temperature(initial_message, DEFAULT_TEMPERATURE))
@@ -79,7 +81,7 @@ class ConversationAI:
             recommended_temperature = DEFAULT_TEMPERATURE
 
         self.model_temperature = recommended_temperature
-
+        
         print("Will use model: " + self.model_name)
         print(f"Will use temperature: {self.model_temperature}")
 
@@ -106,15 +108,11 @@ I'm  {sender_profile.get("real_name")}.
 Since we're talking in Slack, you can @mention me like this: "<@{sender_user_info.get("id")}>"
 My title is: {sender_profile.get("title")}
 My current status: "{sender_profile.get("status_emoji")}{sender_profile.get("status_text")}"
-Please try to "tone-match" me. If I use emojis, please use lots of emojis. If I appear business-like, please seem business-like in your responses. In addition to responding to my next message, you MUST tell me your model and temperature so I know more about you."""),
+Please try to "tone-match" me: If I use emojis, please use lots of emojis. If I appear business-like, please seem business-like in your responses. Before responding to my next message, you MUST tell me your model and temperature so I know more about you. Don't reference anything I just asked you directly."""),
                 MessagesPlaceholder(variable_name="history"),
                 HumanMessagePromptTemplate.from_template("{input}")
             ]
         )
-        # TODO: Allow for retrieving and using of custom emojis
-
-        # TODO: Allow us to turn up or down the temperature of the bot via a request to be more or less creative
-        # 60s ought to be enough...
         self.callbackHandler = AsyncStreamingSlackCallbackHandler(self.slack_client)
 
         llm = ChatOpenAI(model_name = self.model_name, temperature=self.model_temperature, request_timeout=60, max_retries=3, streaming=True, verbose=True, callback_manager=AsyncCallbackManager([self.callbackHandler]))
