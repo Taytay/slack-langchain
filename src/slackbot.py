@@ -5,16 +5,15 @@
 
 # TODO: How is logging normally controlled?
 import logging
-import time
-import os
-import asyncio
-from dotenv import load_dotenv
-import re
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+import os
+from slack_bolt.async_app import AsyncApp
+from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
+import re
+from langchain import OpenAI
 from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from .ConversationAI import ConversationAI
@@ -25,7 +24,7 @@ SLACK_APP_TOKEN = os.environ.get('SLACK_APP_TOKEN')
 SLACK_SIGNING_SECRET = os.environ.get("SLACK_SIGNING_SECRET")
 
 class SlackBot:
-    def __init__(self, slack_app):
+    def __init__(self, slack_app: AsyncApp):
         self.threads_bot_is_participating_in = {}
         self.app = slack_app
         self.client = self.app.client
@@ -195,7 +194,7 @@ class SlackBot:
                     # Get the username for this user_id:
                     processed_history.append({f"{user_name}": text})
 
-        ai = ConversationAI(self.bot_user_name, processed_history)
+        ai = ConversationAI(self.bot_user_name, self.client, processed_history)
         self.threads_bot_is_participating_in[thread_ts] = ai
 
     def is_ai_participating_in_thread(self, thread_ts, message_ts):
@@ -274,30 +273,6 @@ Afterwards, tell the user that you look forward to "chatting" with them, and tel
 app = AsyncApp(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
 client = app.client
 slack_bot = SlackBot(app)
-
-
-# @app.event("app_mention")
-# async def command_handler(body, say):
-#     event = body['event']
-#     text = event['text']
-
-#     message = "This is a sample message with words appearing one by one."
-#     try:
-#         response = await say(' ')  # Send an empty message and get the timestamp
-#         ts = response['ts']  # Get the timestamp of the message
-#         channel = event['channel']
-        
-#         current_message = ""
-#         for word in message.split():
-#             current_message += f"{word} "
-#             try:
-#                 await client.chat_update(channel=channel, ts=ts, text=current_message.strip())
-#             except SlackApiError as e:
-#                 print(f"Error updating message: {e}")
-#             time.sleep(0.01)  # Pause for 1 second before updating the message with the next word
-            
-#     except SlackApiError as e:
-#         print(f"Error sending initial message: {e}")
 
 @app.event("message")
 async def on_message(payload, say):

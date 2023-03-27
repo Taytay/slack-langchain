@@ -13,6 +13,8 @@ from .conversation_utils import is_asking_for_smart_mode, get_recommended_temper
 
 from langchain.callbacks.base import AsyncCallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+
+from slack_sdk import WebClient
 # How to do a search over docs with conversation:
 #https://langchain.readthedocs.io/en/latest/modules/memory/examples/adding_memory_chain_multiple_inputs.html
 # People talking about the parsing error: https://github.com/hwchase17/langchain/issues/1657
@@ -44,13 +46,14 @@ DEFAULT_TEMPERATURE=0.3
 
 class ConversationAI:
     def __init__(
-        self, bot_name, slack_client, existing_thread_history=None, model_name=None
+        self, bot_name:str, slack_client:WebClient, existing_thread_history=None, model_name:str=None
     ):
-
         self.bot_name = bot_name
         self.existing_thread_history = existing_thread_history
         self.model_name = None
         self.agent = None
+        self.model_temperature = None
+        self.slack_client = slack_client
 
     async def create_agent(self, sender_user_info, initial_message):
         print(f"Creating new ConversationAI for {self.bot_name}")
@@ -80,7 +83,7 @@ class ConversationAI:
         print("Will use model: " + self.model_name)
         print(f"Will use temperature: {self.model_temperature}")
 
-        model_facts = f"You are based on the OpenAI model {self.model_name}. Your 'creativity temperature' is set to {self.model_temperature}. People can only ask you to change your model or temperature at the beginning of a conversation. After that, if asked to do so, invite them to start a new converstaion with you, and to specify the desired temperature and smartness when they do so."
+        model_facts = f"You are based on the OpenAI model {self.model_name}. Your 'creativity temperature' is set to {self.model_temperature}."
 
         #additional_kwargs={"name": "example_user"}
         prompt = ChatPromptTemplate.from_messages(
@@ -103,7 +106,7 @@ I'm  {sender_profile.get("real_name")}.
 Since we're talking in Slack, you can @mention me like this: "<@{sender_user_info.get("id")}>"
 My title is: {sender_profile.get("title")}
 My current status: "{sender_profile.get("status_emoji")}{sender_profile.get("status_text")}"
-Please try to "tone-match" me. If I use emojis, please use lots of emojis. If I appear business-like, please seem business-like in your responses. In addition to responding to my next message, please tell me your model and temperature so I know who I am talking to."""),
+Please try to "tone-match" me. If I use emojis, please use lots of emojis. If I appear business-like, please seem business-like in your responses. In addition to responding to my next message, you MUST tell me your model and temperature so I know more about you."""),
                 MessagesPlaceholder(variable_name="history"),
                 HumanMessagePromptTemplate.from_template("{input}")
             ]
@@ -112,10 +115,9 @@ Please try to "tone-match" me. If I use emojis, please use lots of emojis. If I 
 
         # TODO: Allow us to turn up or down the temperature of the bot via a request to be more or less creative
         # 60s ought to be enough...
-        # TODO: Configure this outside of the class
         self.callbackHandler = AsyncStreamingSlackCallbackHandler(self.slack_client)
 
-        llm = ChatOpenAI(model_name = self.model_name, temperature=self.model_temperature, request_timeout=60, max_retries=3, verbose=True, streaming=True, callback_manager=AsyncCallbackManager([self.callbackHandler]))
+        llm = ChatOpenAI(model_name = self.model_name, temperature=self.model_temperature, request_timeout=60, max_retries=3, streaming=True, verbose=True, callback_manager=AsyncCallbackManager([self.callbackHandler]))
         # This buffer memory can be set to an arbitrary buffer
         memory = ConversationBufferMemory(return_messages=True)
 
@@ -155,7 +157,7 @@ Please try to "tone-match" me. If I use emojis, please use lots of emojis. If I 
         agent = await self.get_or_create_agent(sender_user_info, message)
         # TODO: This is messy and needs to be refactored...
         print("Starting response...")
-        self.callbackHandler.start_new_response(channel_id, thread_ts)
+        await self.callbackHandler.start_new_response(channel_id, thread_ts)
         # Now that we have a handler set up, just telling it to predict is sufficient to get it to start streaming the message response...
         response = await self.agent.apredict(input=message)
         return response
