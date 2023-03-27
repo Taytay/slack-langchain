@@ -9,7 +9,7 @@ from langchain.prompts import (ChatPromptTemplate, HumanMessagePromptTemplate,
                                MessagesPlaceholder,
                                SystemMessagePromptTemplate)
 from langchain.utilities import GoogleSerperAPIWrapper, SerpAPIWrapper
-from conversation_utils import is_asking_for_smart_mode, get_recommended_temperature
+from .conversation_utils import is_asking_for_smart_mode, get_recommended_temperature
 
 # How to do a search over docs with conversation:
 #https://langchain.readthedocs.io/en/latest/modules/memory/examples/adding_memory_chain_multiple_inputs.html

@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# Make this a python module:
+
+
 # TODO: How is logging normally controlled?
 import logging
 logger = logging.getLogger(__name__)
@@ -9,7 +12,7 @@ import os
 from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 import re
-from ConversationAI import ConversationAI
+from .ConversationAI import ConversationAI
 from langchain import OpenAI
 
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')

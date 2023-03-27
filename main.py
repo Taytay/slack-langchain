@@ -14,16 +14,14 @@ print("After imports")
 
 # Get the folder this file is in:
 this_file_folder = os.path.dirname(os.path.realpath(__file__))
-# Get the parent folder of this file's folder:
-parent_folder = os.path.dirname(this_file_folder)
 
 print("About to load .env")
-load_dotenv(Path(parent_folder) / ".env")
+load_dotenv(Path(this_file_folder) / ".env")
 
 print("Done")
 
 print("About to load slackbot")
-from slackbot import slack_bot
+from src.slackbot import slack_bot
 print("Done")
 
 async def start():
