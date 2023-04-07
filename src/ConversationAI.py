@@ -9,7 +9,7 @@ from langchain.prompts import (ChatPromptTemplate, HumanMessagePromptTemplate,
                                MessagesPlaceholder,
                                SystemMessagePromptTemplate)
 from langchain.utilities import GoogleSerperAPIWrapper, SerpAPIWrapper
-from .conversation_utils import is_asking_for_smart_mode, get_recommended_temperature
+from conversation_utils import is_asking_for_smart_mode, get_recommended_temperature
 
 from langchain.callbacks.base import AsyncCallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
@@ -19,25 +19,7 @@ from slack_sdk import WebClient
 #https://langchain.readthedocs.io/en/latest/modules/memory/examples/adding_memory_chain_multiple_inputs.html
 # People talking about the parsing error: https://github.com/hwchase17/langchain/issues/1657
 
-from .AsyncStreamingSlackCallbackHandler import AsyncStreamingSlackCallbackHandler
-
-
-class CustomConversationAgent(Agent):
-    def __init__(self, llm_chain, allowed_tools=None):
-        super().__init__(llm_chain, allowed_tools)
-
-    def parse_output(self, output):
-        lines = output.strip().split("\n")
-        is_talking_to_ai = "no"
-        switch_to_smarter_mode = "no"
-
-        for line in lines:
-            if line.startswith("Is_talking_to_AI:"):
-                is_talking_to_ai = line.split(":")[1].strip()
-            elif line.startswith("Switch_to_smarter_mode:"):
-                switch_to_smarter_mode = line.split(":")[1].strip()
-
-        return is_talking_to_ai, switch_to_smarter_mode
+from AsyncStreamingSlackCallbackHandler import AsyncStreamingSlackCallbackHandler
 
 
 DEFAULT_MODEL="gpt-3.5-turbo"
@@ -54,6 +36,7 @@ class ConversationAI:
         self.agent = None
         self.model_temperature = None
         self.slack_client = slack_client
+        self.lock = asyncio.Lock()
 
     async def create_agent(self, sender_user_info, initial_message):
         print(f"Creating new ConversationAI for {self.bot_name}")
@@ -150,15 +133,14 @@ Please try to "tone-match" me: If I use emojis, please use lots of emojis. If I 
         return self.agent
 
     async def respond(self, sender_user_info, channel_id:str, thread_ts:str, message_being_responded_to_ts:str, message:str):
-        is_first_message = self.agent is None
-        # This is our first time responding to a message
-        agent = await self.get_or_create_agent(sender_user_info, message)
-        # TODO: This is messy and needs to be refactored...
-        print("Starting response...")
-        await self.callbackHandler.start_new_response(channel_id, thread_ts)
-        # Now that we have a handler set up, just telling it to predict is sufficient to get it to start streaming the message response...
-        response = await self.agent.apredict(input=message)
-        return response
+        async with self.lock:
+          agent = await self.get_or_create_agent(sender_user_info, message)
+          # TODO: This is messy and needs to be refactored...
+          print("Starting response...")
+          await self.callbackHandler.start_new_response(channel_id, thread_ts)
+          # Now that we have a handler set up, just telling it to predict is sufficient to get it to start streaming the message response...
+          response = await self.agent.apredict(input=message)
+          return response
         
 def get_conversational_agent(model_name="gpt-3.5-turbo"):
   search = GoogleSerperAPIWrapper()
@@ -176,3 +158,22 @@ def get_conversational_agent(model_name="gpt-3.5-turbo"):
   agent_chain = initialize_agent(tools, llm, agent="chat-conversational-react-description", verbose=True, memory=memory, request_timeout=30)
   return agent_chain
 
+
+
+
+# class CustomConversationAgent(Agent):
+#     def __init__(self, llm_chain, allowed_tools=None):
+#         super().__init__(llm_chain, allowed_tools)
+
+#     def parse_output(self, output):
+#         lines = output.strip().split("\n")
+#         is_talking_to_ai = "no"
+#         switch_to_smarter_mode = "no"
+
+#         for line in lines:
+#             if line.startswith("Is_talking_to_AI:"):
+#                 is_talking_to_ai = line.split(":")[1].strip()
+#             elif line.startswith("Switch_to_smarter_mode:"):
+#                 switch_to_smarter_mode = line.split(":")[1].strip()
+
+#         return is_talking_to_ai, switch_to_smarter_mode

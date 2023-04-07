@@ -17,9 +17,8 @@ load_dotenv(Path(parent_folder) / ".env")
 
 from slackbot import slack_bot
 
-async def start():
+async def main():
     await slack_bot.start()
 
 if __name__ == "__main__":
-    print("About to start...")
-    asyncio.run(start())
+    asyncio.run(main())

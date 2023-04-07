@@ -1,4 +1,9 @@
 from typing import Any, Dict, List, Union
+
+import logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
 from slack_sdk import WebClient
 from langchain.callbacks.base import BaseCallbackHandler
 from langchain.schema import AgentAction, AgentFinish, LLMResult
@@ -8,7 +13,7 @@ from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from langchain.callbacks.base import BaseCallbackHandler, AsyncCallbackHandler
 from langchain.schema import AgentAction, AgentFinish, LLMResult
-from .SimpleThrottle import SimpleThrottle
+from SimpleThrottle import SimpleThrottle
 
 class AsyncStreamingSlackCallbackHandler(AsyncCallbackHandler):
     """Async callback handler for streaming to Slack. Only works with LLMs that support streaming."""
@@ -17,13 +22,10 @@ class AsyncStreamingSlackCallbackHandler(AsyncCallbackHandler):
         self.client = client
         self.channel_id = None
         self.thread_ts = None
-        self.update_task = None
         self.update_delay = 0.1  # Set the desired delay in seconds
         self.update_throttle = SimpleThrottle(self._update_message_in_slack, self.update_delay)
 
     async def start_new_response(self, channel_id, thread_ts):
-        if self.update_task is not None:
-            await self.update_task
         self.current_message = ""
         self.message_ts = None
         self.channel_id = channel_id
@@ -42,27 +44,41 @@ class AsyncStreamingSlackCallbackHandler(AsyncCallbackHandler):
         self.current_message += token
         await self.update_throttle.call()
 
+
+    async def handle_llm_error(self, e: Exception) -> None:
+        """Post error message to channel with provided channel_id and thread_ts."""
+        try:
+            logger.error(f"Got LLM Error. Will post about it: {e}")
+            await self.client.chat_postMessage(text=str(e), channel=self.channel_id, thread_ts=self.thread_ts)
+        except Exception as e:
+            logger.error(f"Error posting exception message: {e}")
+
     async def on_llm_start(
         self, serialized: Dict[str, Any], prompts: List[str], **kwargs: Any
     ) -> None:
-        """Run when LLM starts running."""
-        if (self.channel_id is None):
-            raise Exception("channel_id is None")        
-        # Send an empty response and get the timestamp
-        post_response = await self.client.chat_postMessage(text='...', channel=self.channel_id, thread_ts=self.thread_ts)
-        self.message_ts = post_response['ts'] 
+        try:
+            if self.channel_id is None:
+                raise Exception("channel_id is None")
+            # Send an empty response and get the timestamp
+            post_response = await self.client.chat_postMessage(text="...", channel=self.channel_id, thread_ts=self.thread_ts)
+            self.message_ts: str = post_response["ts"]
+        except Exception as e:
+            await self.handle_llm_error(e)
 
     async def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
         """Run when LLM ends running."""
-        await self.update_throttle.call_and_wait()
-        # Make sure it got the last one:
-        await self.start_new_response(self.channel_id, self.thread_ts)
+        try:
+            await self.update_throttle.call_and_wait()
+            # Make sure it got the last one:
+            await self.start_new_response(self.channel_id, self.thread_ts)
+        except Exception as e:
+            await self.handle_llm_error(e)
 
     async def on_llm_error(
         self, error: Union[Exception, KeyboardInterrupt], **kwargs: Any
     ) -> None:
         """Run when LLM errors."""
-        await self.client.chat_postMessage(text=f"{error}", channel=self.channel_id, thread_ts=self.thread_ts)
+        await self.handle_llm_error(error)
 
     async def on_chain_start(
         self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs: Any

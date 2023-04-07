@@ -1,1 +1,1 @@
-./src/slackbot.py
+./src/main.py
