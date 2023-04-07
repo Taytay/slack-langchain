@@ -48,13 +48,16 @@ async def is_asking_for_smart_mode(input:str):
   
   prompt = PromptTemplate(
     input_variables=["input"],
-    template="""Determine the following input contains explicit requests for increased intelligence, extra thinking, gpt4, expensiveness, slowness, etc. Your answer should be only "smart_mode: yes" or "smart_mode: no". Please note that the smart_mode should be selected based solely on whether extra intelligence is being requested, and should not be influenced by the creativity being requested.
+    template="""Determine the following input contains explicit requests like increased intelligence, extra thinking, gpt4, expensiveness, slowness, etc. If so, return "smart_mode: yes". If the input is not explicitly requesting increased intelligence, slowness, gpt4, your answer should be "smart_mode: no". ONLY write "smart_mode: yes" or "smart_mode: no". 
 
 Examples:
 <!begin_input> Hey Chatterbot, I am gonna need you to think real hard about this one! No need to be creative since I'm just gonna talk about code. <!end_input> 
 smart_mode: yes
 
 <!begin_input> Hey Chatterbot, let's brainstorm some funny song titles! <!end_input> 
+smart_mode: no
+
+<!begin_input> Help me code. <!end_input> 
 smart_mode: no
 
 <!begin_input> {input} <!end_input>

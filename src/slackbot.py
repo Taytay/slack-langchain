@@ -10,14 +10,15 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 import os
-from slack_bolt.async_app import AsyncApp
-from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 import re
+from typing import List
+
 from langchain import OpenAI
-from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
-from .ConversationAI import ConversationAI
+from slack_bolt.async_app import AsyncApp
 from slack_sdk.errors import SlackApiError
+
+from ConversationAI import ConversationAI
 
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
@@ -63,41 +64,31 @@ class SlackBot:
             ret_val = profile['display_name']
 
         return ret_val
-
-    async def upload_snippets(self, channel_id, thread_ts, response):
-        # Unused at the moment
-        # Find all triple-backtick code blocks in the markdown formatted response:
-        matches = re.findall(r"```(.*?)```", response, re.DOTALL)
-        counter = 1
+        
+    async def upload_snippets(self, channel_id: str, thread_ts: str, response: str) -> str:
+        matches: List[str] = re.findall(r"```(.*?)```", response, re.DOTALL)
+        counter: int = 1
         for match in matches:
-            # Upload the code block as a file:
-            # Find out what kind of code block it is:
-            # It will be specified as the first word following the backticks:
             match = match.strip()
-            first_line = match.splitlines()[0]
-            first_word = first_line.split()[0]
-            extension = "txt"
+            first_line: str = match.splitlines()[0]
+            first_word: str = first_line.split()[0]
+            extension: str = "txt"
             if first_word == "python":
                 extension = "py"
-            elif first_word == "javascript":
-                extension = "js"
-            elif first_word == "typescript":
+            elif first_word in ["javascript", "typescript"]:
                 extension = "js"
             elif first_word == "bash":
                 extension = "sh"
-            
-            if extension is None:
-                # If we have a first word, we can assume the extension is that first word:
-                if first_word is not None:
+            if not extension:
+                if first_word:
                     extension = first_word
                 else:
                     extension = "txt"
-
             file_response = await self.client.files_upload(channels=channel_id, content=match, filename=f"snippet_{counter}.{extension}", thread_ts=thread_ts)
-            file_id = file_response["file"]["id"]
-            # Replace the code block with a link to the file:
-            # response = response.replace(f"```{match}```", f"<https://slack.com/files/{self.bot_user_id}/{file_id}|code.py>")
+            file_id: str = file_response["file"]["id"]
             response += "\n"+f"<https://slack.com/files/{self.bot_user_id}/{file_id}|code.{extension}>"
+            counter += 1
+        return response
 
     async def reply_to_slack(self, channel_id, thread_ts, message_ts, response):
         # In the future, we could take out any triple backticks code like:
@@ -268,8 +259,12 @@ Use emojis. Maybe write a song. Maybe a poem.
 
 Afterwards, tell the user that you look forward to "chatting" with them, and tell them that they can just mention <@{self.bot_user_id}> whenever they want to talk.
 """])).generations[0][0].text
-        # Send a welcome message to the user
-        await self.client.chat_postMessage(channel=channel_id, text=welcome_message)
+        if welcome_message:
+          try:
+            # Send a welcome message to the user
+            await self.client.chat_postMessage(channel=channel_id, text=welcome_message)
+          except e:
+            logger.exception("Error sending welcome message")
 
 
 app = AsyncApp(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
