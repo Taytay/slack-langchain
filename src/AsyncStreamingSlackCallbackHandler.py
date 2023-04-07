@@ -1,19 +1,18 @@
+import logging
 from typing import Any, Dict, List, Union
 
-import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-from slack_sdk import WebClient
-from langchain.callbacks.base import BaseCallbackHandler
-from langchain.schema import AgentAction, AgentFinish, LLMResult
-
 from typing import Any, Dict, List, Union
+
+from langchain.callbacks.base import AsyncCallbackHandler, BaseCallbackHandler
+from langchain.schema import AgentAction, AgentFinish, LLMResult
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
-from langchain.callbacks.base import BaseCallbackHandler, AsyncCallbackHandler
-from langchain.schema import AgentAction, AgentFinish, LLMResult
-from SimpleThrottle import SimpleThrottle
+
+from .SimpleThrottle import SimpleThrottle
+
 
 class AsyncStreamingSlackCallbackHandler(AsyncCallbackHandler):
     """Async callback handler for streaming to Slack. Only works with LLMs that support streaming."""
