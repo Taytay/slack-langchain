@@ -2,7 +2,6 @@ import logging
 from typing import Any, Dict, List, Union
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 from typing import Any, Dict, List, Union
 
